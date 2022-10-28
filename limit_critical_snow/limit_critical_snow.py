@@ -15,14 +15,44 @@ QUIET = True
 TRACE = True
 WARN = True
 
-def getSortedCriticalList(conn, reasonCommidity, numSorted):
+def getPrevCriticalList(conn, groupName):
+    saveList = []
+
+    # Check for groupName in Turbo
+    groups = conn.get_groups(pager=True, fetch_all=True)
+    doesContain=False
+    for g in groups:
+        if g.get('displayName') == groupName:
+            doesContain=True
+
+    if not doesContain:
+        # Return an empty list, group doesn't exist
+        return saveList
+   
+    # Get group of past entities
+    group = conn.get_group_by_name(groupName)
+
+    for x in group[0].get('memberUuidList'):
+        # Get the action of the entity
+        action = conn.get_entity_actions(uuid=x)
+
+        # Check to see if it's still waiting approval
+        if action[0].get('actionMode') == 'EXTERNAL_APPROVAL':
+            # Save action
+            saveList.append(conn.get_entities(uuid=x)[0])
+
+    return saveList
+
+def getSortedCriticalList(conn, reasonCommidity, numSorted, prevList):
     actions = conn.get_actions(fetch_all=True)
 
     # Obtains the critical uuids based on the reasonCommidity value
-    critical_uuids = [x['target']['uuid'] for x in actions
-        if x['risk'].get('reasonCommodity') is not None
+    critical_uuids=[]
+    for x in actions:
+        if x['risk'].get('reasonCommodity') is not None:
             # Potentially check for On-prem vs. On-cloud
-            if x['risk']['severity'] == 'CRITICAL' and x['risk']['reasonCommodity'] == reasonCommidity] # CPU, VCPU, VMem, SegmentationCommodity, SoftwareLicenseCommodity
+            if x['risk']['severity'] == 'CRITICAL' and x['risk']['reasonCommodity'] == reasonCommidity: # CPU, VCPU, VMem, SegmentationCommodity, SoftwareLicenseCommodity
+                critical_uuids.append(x['target']['uuid'])
 
     # Obtains a list of entity stats
     vm_stats = conn.get_entity_stats(critical_uuids, stats=[reasonCommidity], related_type="VirtualMachine", pager=True, fetch_all=True)
@@ -42,6 +72,20 @@ def getSortedCriticalList(conn, reasonCommidity, numSorted):
     # Take first 10 entries
     sorted_vms = sorted_vms[:int(numSorted)]
 
+    # Check to see if any VMs from the previous day is/isn't in the current day.
+    for pv in prevList:
+        isFound = False
+        for sv in sorted_vms:
+            # Check to see if yesterday's vm is in today's lot, if so ignore adding
+            if sv.get('uuid') == pv.get('uuid'):
+                isFound = True
+                break
+
+        # New day's list doesn't contain a VM Critical from yesterday, adding..
+        if not isFound:
+            print("Adding previous vm "+ pv.get('uuid')+" to today's list")
+            sorted_vms.append(pv)
+
     return sorted_vms
 
 
@@ -58,7 +102,7 @@ def createCriticalCSV(fileName,sorted_vms, group_name):
 
     for vm in sorted_vms:
         # write a row to the csv file
-        writer.writerow([vm["className"], vm["displayName"], group_name])
+        writer.writerow([vm.get("className"), vm.get("displayName"), group_name])
 
     # close the file
     f.close()
@@ -125,8 +169,8 @@ def main(conn, reason_commidity, file_name, num_sorted, group_name):
                 }}
 
     """
-
-    sortedCritical = getSortedCriticalList(conn,reason_commidity, num_sorted)
+    prevList = getPrevCriticalList(conn, group_name)
+    sortedCritical = getSortedCriticalList(conn,reason_commidity, num_sorted, prevList)
     createCriticalCSV(file_name, sortedCritical, group_name)
 
     # Enable sysout output
@@ -150,7 +194,7 @@ if __name__ == "__main__":
     __TURBO_TARGET = "localhost"
     __TURBO_USER = "administrator"
     __TURBO_PASS = ""
-    __TURBO_CREDS = b""
+    __TURBO_CREDS = ""
 
     # Parse Arguments
     arg_parser = argparse.ArgumentParser(description="Limit Critical ServiceNow change requests")
