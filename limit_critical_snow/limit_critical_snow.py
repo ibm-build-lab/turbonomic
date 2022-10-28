@@ -30,7 +30,7 @@ def getPrevCriticalList(conn, groupName):
         return saveList
    
     # Get group of past entities
-    group = conn.get_group_by_name(groupName)
+    group = conn.get_group_by_name(groupName, pager=True, fetch_all=True)
 
     for x in group[0].get('memberUuidList'):
         # Get the action of the entity
@@ -39,7 +39,7 @@ def getPrevCriticalList(conn, groupName):
         # Check to see if it's still waiting approval
         if action[0].get('actionMode') == 'EXTERNAL_APPROVAL':
             # Save action
-            saveList.append(conn.get_entities(uuid=x)[0])
+            saveList.append(conn.get_entities(uuid=x)[0], fetch_all=True)
 
     return saveList
 
