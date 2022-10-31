@@ -39,7 +39,7 @@ def getPrevCriticalList(conn, groupName):
         # Check to see if it's still waiting approval
         if action[0].get('actionMode') == 'EXTERNAL_APPROVAL':
             # Save action
-            saveList.append(conn.get_entities(uuid=x)[0], fetch_all=True)
+            saveList.append(conn.get_entities(uuid=x)[0])
 
     return saveList
 
