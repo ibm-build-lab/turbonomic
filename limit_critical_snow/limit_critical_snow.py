@@ -48,26 +48,39 @@ def getSortedCriticalList(conn, reasonCommidity, numSorted, prevList):
 
     # Obtains the critical uuids based on the reasonCommidity value
     critical_uuids=[]
+    # Used for VMem
+    critical_action_objs=[]
     for x in actions:
         if x['risk'].get('reasonCommodity') is not None:
             # Potentially check for On-prem vs. On-cloud
-            if x['risk']['severity'] == 'CRITICAL' and x['risk']['reasonCommodity'] == reasonCommidity: # CPU, VCPU, VMem, SegmentationCommodity, SoftwareLicenseCommodity
+            if x['risk']['severity'] == 'CRITICAL' and x['risk']['reasonCommodity'] == reasonCommidity and x['actionType'] == "RESIZE": # CPU, VCPU, VMem, SegmentationCommodity, SoftwareLicenseCommodity
                 critical_uuids.append(x['target']['uuid'])
-
-    # Obtains a list of entity stats
-    vm_stats = conn.get_entity_stats(critical_uuids, stats=[reasonCommidity], related_type="VirtualMachine", pager=True, fetch_all=True)
-
-    # Determines the vcpu percentile
-    for x in vm_stats:
-        for y in x['stats']:
-            i = [item for item in y['statistics'] if item.get('name') == reasonCommidity]
-            if len(i) > 0 and i[0]['values']['avg'] != 0: 
-                x["v_percentile"] = i[0]['capacity']['avg'] / i[0]['values']['avg']
-            else:
-                x["v_percentile"] = -1 # divide by 0 issue / skip VM
-
+                #Used for vmem calculations
+                if reasonCommidity == 'VMem' and x['target']['className'] == 'VirtualMachine':
+                    x['displayName'] = x['target']['displayName']
+                    x['className'] = x['target']['className']
+                    critical_action_objs.append(x)
+    
     # Sorts the vm_stats based on the vcpu_percentile (capacity-avg/values-avg)
-    sorted_vms = sorted(vm_stats, key=lambda x: x["v_percentile"], reverse=True)    
+    if reasonCommidity == 'VCPU':
+        # Obtains a list of entity stats
+        vm_stats = conn.get_entity_stats(critical_uuids, stats=[reasonCommidity], related_type="VirtualMachine", pager=True, fetch_all=True)
+
+        # Determines the vcpu percentile
+        for x in vm_stats:
+            for y in x['stats']:
+                i = [item for item in y['statistics'] if item.get('name') == reasonCommidity]
+                if len(i) > 0 and i[0]['values']['avg'] != 0: 
+                    x["v_percentile"] = i[0]['capacity']['avg'] / i[0]['values']['avg']
+                else:
+                    x["v_percentile"] = -1 # divide by 0 issue / skip VM
+        sorted_vms = sorted(vm_stats, key=lambda x: x["v_percentile"], reverse=True)
+
+    elif reasonCommidity == 'VMem':
+        for obj in critical_action_objs:        
+            obj["v_percentile"] = float(obj['newValue']) - float(obj['currentValue'])
+        sorted_vms = sorted(critical_action_objs, key=lambda x: x["v_percentile"], reverse=True)
+
 
     # Take first 10 entries
     sorted_vms = sorted_vms[:int(numSorted)]
