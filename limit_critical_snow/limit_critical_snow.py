@@ -6,6 +6,7 @@ import argparse
 import requests
 import sys
 import csv_to_static_groups
+import math
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
@@ -59,6 +60,8 @@ def getSortedCriticalList(conn, reasonCommidity, numSorted, prevList):
                 if reasonCommidity == 'VMem' and x['target']['className'] == 'VirtualMachine':
                     x['displayName'] = x['target']['displayName']
                     x['className'] = x['target']['className']
+                    x['uuid'] = x['target']['uuid']
+
                     critical_action_objs.append(x)
     
     # Sorts the vm_stats based on the vcpu_percentile (capacity-avg/values-avg)
@@ -76,14 +79,42 @@ def getSortedCriticalList(conn, reasonCommidity, numSorted, prevList):
                     x["v_percentile"] = -1 # divide by 0 issue / skip VM
         sorted_vms = sorted(vm_stats, key=lambda x: x["v_percentile"], reverse=True)
 
+        # Take first x (10) entries
+        sorted_vms = sorted_vms[:int(numSorted)]
+
     elif reasonCommidity == 'VMem':
-        for obj in critical_action_objs:        
-            obj["v_percentile"] = float(obj['newValue']) - float(obj['currentValue'])
-        sorted_vms = sorted(critical_action_objs, key=lambda x: x["v_percentile"], reverse=True)
 
+        for obj in critical_action_objs:   
+            # Big VM's     
+            obj["vmem_biggest_increase"] = float(obj['newValue']) - float(obj['currentValue'])
+            # Little VM's
+            obj["vmem_percentage"] = float(obj['newValue']) / float(obj['currentValue'])
 
-    # Take first 10 entries
-    sorted_vms = sorted_vms[:int(numSorted)]
+        sorted_vms = sorted(critical_action_objs, key=lambda x: x["vmem_biggest_increase"], reverse=True)
+        sorted_vms_percentage = sorted(critical_action_objs, key=lambda x: x["vmem_percentage"], reverse=True)
+
+        # Grab the first half (ceiling) of entries based on the biggest vmem increase
+        num = math.ceil(int(numSorted)/2)
+        sorted_vms = sorted_vms[:int(num)]
+        
+        # Grab the second half (numSorted - ceiling (remainder))
+        remainder=int(numSorted)-num
+
+        total=0
+        for vm_p in sorted_vms_percentage:
+            # Sanity check for obtaining remainder(x) entries
+            if remainder == total:
+                break
+
+            isFound = False
+            for vm in sorted_vms:
+                if vm_p["displayName"] == vm["displayName"]:
+                    isFound = True
+                    break
+
+            if not isFound:
+                total+=1
+                sorted_vms.append(vm_p)
 
     # Check to see if any VMs from the previous day is/isn't in the current day.
     for pv in prevList:
@@ -192,12 +223,12 @@ def main(conn, reason_commidity, file_name, num_sorted, group_name):
     # Enable verbose output
     csv_to_static_groups.VERBOSE = True
     csv_file = file_name+'.csv'
-    changes = csv_to_static_groups.main(conn, csv_file, group_headers=['Department'])
+    # changes = csv_to_static_groups.main(conn, csv_file, group_headers=['Department'])
 
-    # Print Total Changes
-    print("\n")
-    for category, attr in changes.items():
-        print("{}: {}".format(category, attr["total"]))
+    # # Print Total Changes
+    # print("\n")
+    # for category, attr in changes.items():
+    #     print("{}: {}".format(category, attr["total"]))
 
 
 
