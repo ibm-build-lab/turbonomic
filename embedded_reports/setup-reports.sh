@@ -18,11 +18,11 @@
 
 NAMESPACE=${1}
 SECURITYCONTEXT=${2}
-REPORTSPASSWORD=${3}
+REPORTSPASSWORD=""
 
 #1000620000
 
-if [ $# -lt 3 ] 
+if [ $# -lt 2 ] 
 then
         echo "Usage: <namespace> <security context> <dababase password>"
         echo
@@ -37,7 +37,11 @@ fi
 
 #NAMESPACE="turbonomic"
 
-echo $NAMESPACE " " $SECURITYCONTEXT " " $REPORTSPASSWORD
+# Prompt user for password for grafana
+echo New Grafana Password:
+read -s REPORTSPASSWORD
+
+echo $NAMESPACE " " $SECURITYCONTEXT
 
 echo "Creating JSON object for the patch"
 cp grafana.template.json grafana.json
