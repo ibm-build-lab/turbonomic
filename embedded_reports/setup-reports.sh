@@ -31,7 +31,6 @@ then
         echo "Parameter options :"
         echo  "1 <namespace> - The Namespace where Turbonomic is installed"
         echo  "2 <Security Context> - The OpenShift Security Context group?"
-        echo  "3 <database password> - Initial password for the reports databases"
    exit 1
 fi
 
