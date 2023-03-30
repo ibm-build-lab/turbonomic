@@ -1,0 +1,32 @@
+{
+"spec": {
+    "grafana": {
+      "adminPassword": "dbpassword",
+      "enabled": true,
+      "grafana.ini": {
+        "database": {
+          "password": "dbpassword",
+          "type": "postgres"
+        }
+      }
+    },
+    "extractor": {
+      "enabled": true
+    },
+    "reporting": {
+      "enabled": true
+    },
+    "properties": {
+      "extractor": {
+        "grafanaAdminPassword": "dbpassword"
+      }
+    },
+    "timescaledb": {
+      "enabled": true,
+      "securityContext": {
+        "fsGroup": securitycontext,
+        "runAsUser": securitycontext
+      }
+    }
+  }
+}
